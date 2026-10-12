@@ -378,7 +378,11 @@ function buildDecorations(view: EditorView, showMarkers = false): DecorationSet 
         //      the URL the visible text, so we leave it alone there. ----
         if (name === 'URL') {
           const parent = node.node.parent;
-          const inLabeledLink = parent && parent.name === 'Link';
+          // GFM also emits a URL node for a URL-valued label (#395).
+          // Only the URL immediately following `(` is the destination.
+          const previous = node.node.prevSibling;
+          const inLabeledLink = parent?.name === 'Link' && previous?.name === 'LinkMark' &&
+            view.state.doc.sliceString(previous.from, previous.to) === '(';
           if (inLabeledLink && !showMarkers && !caretTouches && nTo > nFrom) {
             ranges.push(hideDeco.range(nFrom, nTo));
           }
