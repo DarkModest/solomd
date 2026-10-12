@@ -119,6 +119,8 @@ To write a new check: `run.sh --one dev/calib.steps cm` with `udump:x` lines, re
 | 22-docx-import | W | export DOCX → Ctrl+Shift+L import: heading, bold, link, [ ]/[x], numbered list |
 | 23-minimize-restore | W | minimize trims WebView2 working set ≥25 %; taskbar restore renders + edits save |
 | 24-ime-pinyin | W Wp | real Microsoft Pinyin, 30 s settle, exact 8-line text on disk |
+| 25-table-unsaved | W | backdrop and repeated Ctrl+W preserve a table draft; Escape prompts; apply writes to the original note |
+| 26-url-label | W | live rendering preserves URL-valued link labels, hides destinations, and leaves source bytes unchanged |
 
 ## Traps this suite already handles
 

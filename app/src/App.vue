@@ -961,6 +961,14 @@ async function runEditHistory(kind: 'undo' | 'redo') {
  * menu-only entries below.
  */
 function dispatchMenuAction(id: string) {
+  // The table's working copy belongs to its original note/view. Native menu
+  // accelerators must not close or change that view underneath the dialog.
+  if (tableEditor.session) {
+    if (id === 'file.closeTab' || id === 'file.exit') {
+      window.dispatchEvent(new Event('solomd:table-close-request'));
+    }
+    return;
+  }
   if (id.startsWith('recent.open:')) {
     const path = workspace.recentFiles[Number(id.slice('recent.open:'.length))];
     if (path) void files.openPath(path);
@@ -1457,6 +1465,10 @@ onMounted(async () => {
     await listen<string>('solomd://close-requested', async (e) => {
       const me = getCurrentWindow().label;
       if (e.payload && e.payload !== me) return;
+      if (tableEditor.session) {
+        window.dispatchEvent(new Event('solomd:table-close-request'));
+        return;
+      }
       // Editors sync their document into the store on a debounce; text typed
       // just before the close would otherwise miss the persist below.
       flushPendingEdits();

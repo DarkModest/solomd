@@ -12,6 +12,9 @@ out = sys.argv[1]
 os.makedirs(out, exist_ok=True)
 
 FILES = {
+    # Final 5.0 package acceptance: table drafts and URL-valued link labels.
+    "table-acceptance.md": "| HeaderAlpha | HeaderBeta |\n| --- | --- |\n| CellOne | CellTwo |\n",
+    "url-label.md": "# Link labels\n\n[https://example.com](https://target.invalid)\n\n[PlainLabel](https://other.invalid)\n\nCaret parking.\n",
     # A4 open/type/save
     "save.md": "# Save test\n\nHello world.\n",
     # A1 / A6 / A7 tabs

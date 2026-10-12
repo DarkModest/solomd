@@ -1,6 +1,10 @@
 // Runs before every check: put the app back to the baseline taken by setup.js
 // so checks stay independent of each other and of their order.
 const snap = window.__regressSettings;
+// Per-editor dialogs use session buses rather than App-level *Open refs.
+// Clear them even when the previous check failed before its own cleanup.
+(await import('/src/lib/table-editor-bus.ts')).closeTableEditor();
+(await import('/src/lib/formula-editor-bus.ts')).closeFormulaEditor();
 // 1. Close every App-level overlay / dialog (App.vue refs named *Open).
 for (const k of Object.keys(APP)) {
   if (/Open$/.test(k) && typeof APP[k] === 'boolean' && APP[k]) { try { APP[k] = false; } catch {} }
