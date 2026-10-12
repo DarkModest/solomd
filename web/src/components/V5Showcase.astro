@@ -190,12 +190,13 @@ const COPY: Record<Lang, Copy> = {
 };
 
 const c = COPY[lang] ?? COPY.en;
+const imgPrefix = lang === 'zh' ? '/v5' : '/v5/en';
 // The selection shot is a crop of the editor, so the bar reads at web size;
 // it gets a card instead of a window shadow.
 const SHOTS = [
-  { src: '/v5/mac-focus.webp', dark: '/v5/mac-focus-dark.webp', w: 1600, h: 983 },
-  { src: '/v5/mac-bubble.webp', dark: '/v5/mac-bubble-dark.webp', w: 1680, h: 850, crop: true },
-  { src: '/v5/mac-split.webp', dark: '/v5/mac-split-dark.webp', w: 1600, h: 983 },
+  { src: `${imgPrefix}/mac-focus.webp`, dark: `${imgPrefix}/mac-focus-dark.webp`, w: 1600, h: 983 },
+  { src: `${imgPrefix}/mac-bubble.webp`, dark: `${imgPrefix}/mac-bubble-dark.webp`, w: 1680, h: 850, crop: true },
+  { src: `${imgPrefix}/mac-split.webp`, dark: `${imgPrefix}/mac-split-dark.webp`, w: 1600, h: 983 },
 ];
 ---
 
@@ -226,15 +227,15 @@ const SHOTS = [
     <p class="v5__lead">{c.platformsLead}</p>
     <div class="v5__devices">
       <figure class="v5__device v5__device--win">
-        <img src="/v5/windows-light.webp" alt="SoloMD 5.0 on Windows" width="1496" height="815" loading="lazy" decoding="async" />
+        <img src={`${imgPrefix}/windows-light.webp`} alt="SoloMD 5.0 on Windows" width="1496" height="815" loading="lazy" decoding="async" />
         <figcaption>Windows</figcaption>
       </figure>
       <figure class="v5__device v5__device--pad">
-        <div class="v5__bezel v5__bezel--pad"><img src="/v5/ipad-portrait.webp" alt="SoloMD 5.0 on iPad" width="951" height="1368" loading="lazy" decoding="async" /></div>
+        <div class="v5__bezel v5__bezel--pad"><img src={`${imgPrefix}/ipad-portrait.webp`} alt="SoloMD 5.0 on iPad" width="951" height="1368" loading="lazy" decoding="async" /></div>
         <figcaption>iPad</figcaption>
       </figure>
       <figure class="v5__device v5__device--phone">
-        <div class="v5__bezel v5__bezel--phone"><img src="/v5/phone-editor.webp" alt="SoloMD 5.0 on iPhone" width="627" height="1363" loading="lazy" decoding="async" /></div>
+        <div class="v5__bezel v5__bezel--phone"><img src={`${imgPrefix}/phone-editor.webp`} alt="SoloMD 5.0 on iPhone" width="627" height="1363" loading="lazy" decoding="async" /></div>
         <figcaption>iPhone</figcaption>
       </figure>
     </div>

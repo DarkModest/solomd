@@ -176,10 +176,10 @@ const initialDownloadsText = initialDownloads > 0 ? fmtDownloads(initialDownload
          drop-shadow that follows them. -->
     <div class="hero__demo">
       <picture>
-        <source srcset="/v5/mac-dark.webp" media="(prefers-color-scheme: dark)" type="image/webp" />
+        <source srcset={lang === 'zh' ? '/v5/mac-dark.webp' : '/v5/en/mac-dark.webp'} media="(prefers-color-scheme: dark)" type="image/webp" />
         <img
           class="hero__demo-media"
-          src="/v5/mac-light.webp"
+          src={lang === 'zh' ? '/v5/mac-light.webp' : '/v5/en/mac-light.webp'}
           alt={tr.hero.demoAlt}
           width="2400"
           height="1474"
