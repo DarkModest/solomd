@@ -2,8 +2,9 @@
 import { ref, onMounted, onBeforeUnmount, watch, computed, nextTick } from 'vue';
 import { EditorState, Compartment, Prec } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection, rectangularSelection, crosshairCursor } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, indentWithTab, undo as cmUndo, redo as cmRedo } from '@codemirror/commands';
 import { searchKeymap, search, openSearchPanel, getSearchQuery, setSearchQuery } from '@codemirror/search';
+import { createFindPanel, type FindPanelLabels } from '../lib/cm-find-panel';
 import { syntaxHighlighting, defaultHighlightStyle, indentOnInput, bracketMatching } from '@codemirror/language';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { cjkFriendlyEmphasis } from '../lib/cm-cjk-emphasis';
@@ -45,7 +46,7 @@ import {
   shiftHeading,
   type EditorCommand,
 } from '../lib/editor-commands';
-import { caretRowInfo, caretTopPx, caretPointPx, lastVisualRowStart, firstVisualRowEnd, measureLineHeights, offsetAtPoint } from '../lib/textarea-metrics';
+import { caretRowInfo, caretTopPx, caretPointPx, lastVisualRowStart, firstVisualRowEnd, measureLineHeights, offsetAtPoint, selectionBoxPx } from '../lib/textarea-metrics';
 import { activeParagraphLines, lineAt } from '../lib/focus-paragraph';
 import { transformCase, nextCaseInCycle, caseTargetRange, type CaseMode } from '../lib/text-case';
 import { applyFormat, FORMAT_KINDS, listIndentEdit, type FormatKind } from '../lib/md-format';
@@ -91,6 +92,7 @@ import {
   clearSession,
 } from '../lib/cm-session-restore';
 import { renderMarkdown, extractImageRoot as extractMarkdownImageRoot } from '../lib/markdown';
+import { useRenderDepsVersion } from '../composables/useRenderDepsVersion';
 import { attachCodeCopyButtons } from '../lib/code-copy';
 import { plantumlSvgUrl } from '../lib/plantuml';
 import { stableClickSelection } from '../lib/cm-stable-click';
@@ -98,7 +100,9 @@ import { installSvgImageFallbacks, rewriteImageUrls } from '../lib/image-resolve
 import { SLASH_BLOCKS, filterBlocks, expandSnippet } from '../lib/slash-blocks';
 import { useWorkspaceIndexStore } from '../stores/workspaceIndex';
 import { isWindowsEditorRuntime, shouldUsePlainWindowsEditor } from '../lib/platform';
-import { isAndroid, isIOS } from '../lib/platform';
+import { isAndroid, isIOS, isMobile } from '../lib/platform';
+import SelectionBubble, { type BubbleSelection } from './SelectionBubble.vue';
+import { lineContext, nextHeadingKind, type Box } from '../lib/selection-bubble';
 import EditorContextMenu, { type EditorMenuAction, type EditorMenuSpell } from './EditorContextMenu.vue';
 import { lookupMisspelling, addToSpellDict } from '../lib/spell-suggest';
 import { copyImageElement } from '../lib/image-clipboard';
@@ -235,9 +239,6 @@ function baseKeymap() {
 }
 const richCompartment = new Compartment();
 const spellCheckCompartment = new Compartment();
-// Search panel labels: reconfigured when the UI language changes, or tabs
-// open before a switch kept the old language until restart.
-const searchPhrasesCompartment = new Compartment();
 const focusCompartment = new Compartment();
 const typewriterCompartment = new Compartment();
 const vimCompartment = new Compartment();
@@ -363,6 +364,7 @@ function syncEditorContentSoon(text: string) {
 }
 
 const plainEditor = ref<HTMLTextAreaElement | null>(null);
+const plainHostEl = ref<HTMLDivElement | null>(null);
 const plainLiveHost = ref<HTMLDivElement | null>(null);
 const plainBlockEditors = ref<Record<number, HTMLTextAreaElement | null>>({});
 const plainText = ref(props.tab.content || '');
@@ -379,6 +381,10 @@ let plainSelectAllPending = false;
 const plainComposing = ref(false);
 let plainMermaidIdSeq = 0;
 const plainRenderCache = new Map<string, string>();
+// Bumps when KaTeX / highlight.js finish loading (lib/render-deps.ts). Part
+// of the cache key below, so blocks rendered with placeholder math / plain
+// code re-render — the plainBlocks computed reads it through that key.
+const renderDepsVersion = useRenderDepsVersion();
 
 const plainLiveEnabled = computed(
   () => usePlainWindowsEditor && settings.viewMode === 'liveEdit' && props.tab.language === 'markdown',
@@ -601,7 +607,7 @@ function renderPlainBlock(src: string): string {
   // change when any of those headings changes.
   const tocSource = isTocBlock ? plainText.value || '' : undefined;
   const tocKey = tocSource === undefined ? '' : `\u0000toc:${plainTocFingerprint(tocSource)}`;
-  const key = `${settings.markdownHardBreaks ? 'hb' : 'sb'}${settings.markdownAutoNumberHeadings ? 'nh' : ''}\u0000${props.tab.filePath || ''}\u0000${root}\u0000${src}${tocKey}`;
+  const key = `${settings.markdownHardBreaks ? 'hb' : 'sb'}${settings.markdownAutoNumberHeadings ? 'nh' : ''}d${renderDepsVersion.value}\u0000${props.tab.filePath || ''}\u0000${root}\u0000${src}${tocKey}`;
   const cached = plainRenderCache.get(key);
   if (cached != null) return cached;
   const html = rewriteImageUrls(
@@ -929,12 +935,12 @@ function plainLineHeightPx(): number {
   const editor = plainLiveEnabled.value
     ? plainBlockEditors.value[plainActiveBlock.value]
     : plainEditor.value;
-  if (!editor) return Math.max(16, (settings.fontSize || 14) * 1.6);
+  if (!editor) return Math.max(16, (settings.fontSize || 16) * 1.8);
   const style = window.getComputedStyle(editor);
   const n = Number.parseFloat(style.lineHeight);
   if (Number.isFinite(n) && n > 0) return n;
   const fs = Number.parseFloat(style.fontSize);
-  return Number.isFinite(fs) && fs > 0 ? fs * 1.6 : 24;
+  return Number.isFinite(fs) && fs > 0 ? fs * 1.8 : 29;
 }
 
 function plainSelectionText(): string {
@@ -1476,6 +1482,7 @@ const plainFindQuery = ref('');
 const plainReplaceValue = ref('');
 const plainFindCaseSensitive = ref(false);
 const plainFindInput = ref<HTMLInputElement | null>(null);
+const plainReplaceInput = ref<HTMLInputElement | null>(null);
 const plainMatches = ref<Array<{ start: number; end: number }>>([]);
 const plainMatchIndex = ref(0);
 // Where the caret was when the find bar opened: typing a query jumps to the
@@ -1517,15 +1524,18 @@ function runPlainSearch() {
   if (plainMatchIndex.value >= out.length) plainMatchIndex.value = 0;
 }
 
-function openPlainFind() {
+function openPlainFind(replace = false) {
   const wasOpen = plainFindOpen.value;
   plainFindOpen.value = true;
   if (!wasOpen) plainFindAnchor = plainCaretDocOffset();
   const selected = plainSelectionText();
   if (selected && !selected.includes('\n')) plainFindQuery.value = selected;
   nextTick(() => {
-    plainFindInput.value?.focus();
-    plainFindInput.value?.select();
+    // Replace (Ctrl+H) lands in the replace field when there is already
+    // something to find; with an empty query it starts where the user must.
+    const target = replace && plainFindQuery.value ? plainReplaceInput.value : plainFindInput.value;
+    target?.focus();
+    target?.select();
     revealPlainMatchFromAnchor();
   });
 }
@@ -2480,7 +2490,7 @@ function estimatePlainBlockCaretFromClick(index: number, event: MouseEvent): num
   if (lines.length <= 1) return 0;
   const rect = render.getBoundingClientRect();
   const style = window.getComputedStyle(render);
-  const lineHeight = Number.parseFloat(style.lineHeight) || (Number.parseFloat(style.fontSize) || 15) * 1.7;
+  const lineHeight = Number.parseFloat(style.lineHeight) || (Number.parseFloat(style.fontSize) || 16) * 1.8;
   const lineIndex = Math.max(0, Math.min(lines.length - 1, Math.floor((event.clientY - rect.top) / lineHeight)));
   let caret = 0;
   for (let i = 0; i < lineIndex; i++) caret += lines[i].length + 1;
@@ -3527,26 +3537,6 @@ function listIndentCommand(v: EditorView, outdent: boolean): boolean {
  * (lib/list-renumber). Appended to the same transaction, so one undo step
  * takes back the edit and the renumbering together.
  */
-/** The search panel's labels in the UI language (its own strings are English). */
-function searchPanelPhrases(): Record<string, string> {
-  // The plain editor's labels carry their key hint, "Next (Enter)"; the
-  // panel's buttons are bare words.
-  const bare = (key: string) => t(key).replace(/\s*[(（][^)）]*[)）]\s*$/, '');
-  return {
-    Find: t('plainFind.findPlaceholder'),
-    Replace: t('plainFind.replacePlaceholder'),
-    next: bare('plainFind.next'),
-    previous: bare('plainFind.prev'),
-    all: t('plainFind.selectAll'),
-    'match case': t('plainFind.matchCase'),
-    regexp: t('plainFind.regexp'),
-    'by word': t('plainFind.wholeWord'),
-    replace: t('plainFind.replaceOne'),
-    'replace all': t('plainFind.replaceAll'),
-    close: bare('plainFind.close'),
-  };
-}
-
 const listRenumberFilter = EditorState.transactionFilter.of((tr) => {
   if (!tr.docChanged || !(tr.isUserEvent('input') || tr.isUserEvent('delete') || tr.isUserEvent('move'))) {
     return tr;
@@ -3646,8 +3636,10 @@ function activeLineExtension(on: boolean) {
 const fontSizeTheme = (px: number, family: string) =>
   EditorView.theme({
     '&': { fontSize: `${px}px`, height: '100%' },
-    '.cm-scroller': { fontFamily: buildEditorFontStack(family), lineHeight: '1.6' },
-    '.cm-content': { padding: '12px 16px' },
+    // 5.0 §5 — body 16/1.8 (the size is the user's; 1.8 is CJK-comfortable),
+    // 56px above the first line, room to scroll the last line up to the eye.
+    '.cm-scroller': { fontFamily: buildEditorFontStack(family), lineHeight: '1.8' },
+    '.cm-content': { padding: '56px 32px 30vh', caretColor: 'var(--accent)' },
     '.cm-gutters': {
       backgroundColor: 'transparent',
       border: 'none',
@@ -3656,18 +3648,29 @@ const fontSizeTheme = (px: number, family: string) =>
     '.cm-activeLine': { backgroundColor: 'transparent' },
     '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--accent)' },
     '.cm-cursor': { borderLeftColor: 'var(--accent)', borderLeftWidth: '2px' },
-    '.cm-selectionBackground, ::selection': { backgroundColor: 'rgba(255,159,64,0.25) !important' },
+    // Inactive window → neutral grey: styles/writing.css (:root.window-inactive).
+    '.cm-selectionBackground, ::selection': { backgroundColor: 'var(--accent-soft) !important' },
     // v4.3.0 issue #67: distinct current-match highlight for the Cmd+F search
     // panel. CM6 marks the active result with `.cm-searchMatch-selected` —
     // by default it's the same translucent color as the other matches so the
     // user can't tell which one they're on. Brighten it to the accent color
     // and tint the others down so the current one pops.
-    '.cm-searchMatch': { backgroundColor: 'rgba(255,159,64,0.22)', borderRadius: '2px' },
-    '.cm-searchMatch.cm-searchMatch-selected': {
-      backgroundColor: 'var(--accent, #ff9f40)',
-      color: 'var(--accent-fg, #fff)',
-      outline: '1px solid var(--accent, #ff9f40)',
+    // !important: CodeMirror's dark base theme (`&dark .cm-searchMatch`) is
+    // more specific than this theme and repainted matches blue-outlined, and
+    // the current one as accent-coloured text on a dark fill — unreadable.
+    '.cm-searchMatch': {
+      backgroundColor: 'color-mix(in srgb, var(--accent, #ff9f40) 24%, transparent) !important',
+      outline: 'none !important',
+      borderRadius: '2px',
     },
+    '.cm-searchMatch.cm-searchMatch-selected': {
+      backgroundColor: 'var(--accent, #ff9f40) !important',
+      color: 'var(--accent-fg, #fff)',
+      outline: '1px solid var(--accent, #ff9f40) !important',
+    },
+    // The match's own text colour (a heading, a link…) would sit on the
+    // accent fill; inside the current match everything takes accent-fg.
+    '.cm-searchMatch.cm-searchMatch-selected *': { color: 'var(--accent-fg, #fff) !important' },
   });
 
 function buildExtensions() {
@@ -3697,9 +3700,9 @@ function buildExtensions() {
           indentOnInput(),
           bracketMatching(),
           highlightActiveLine(),
-          search({ top: true }),
-          // CodeMirror's search panel speaks English unless given phrases.
-          searchPhrasesCompartment.of(EditorState.phrases.of(searchPanelPhrases())),
+          // 5.0 — our own find bar (lib/cm-find-panel.ts), labels read when
+          // it opens so a language switch shows at the next ⌘F.
+          search({ top: true, createPanel: (v) => createFindPanel(v, findPanelLabels()) }),
           incrementalFindScroll,
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         ]),
@@ -3708,6 +3711,10 @@ function buildExtensions() {
     baseKeymapCompartment.of(baseKeymap()),
     keymap.of([
       ...historyKeymap,
+      // CodeMirror redoes on Ctrl+Y only on Windows (Ctrl+Shift+Z is Linux's,
+      // ⌘⇧Z the Mac's); people type Ctrl+Shift+Z there too, and the plain
+      // editor already takes both.
+      { win: 'Ctrl-Shift-z', run: cmRedo, preventDefault: true },
       { key: 'Tab', run: (v) => listIndentCommand(v, false) },
       { key: 'Shift-Tab', run: (v) => listIndentCommand(v, true) },
       indentWithTab,
@@ -3829,7 +3836,9 @@ onMounted(() => {
   window.addEventListener('solomd:transform-case', onTransformCase as EventListener);
   window.addEventListener('solomd:format-markdown', onFormatMarkdown as EventListener);
   window.addEventListener('solomd:editor-command', onEditorCommand as EventListener);
+  window.addEventListener('solomd:editor-history', onEditorHistory as EventListener);
   cleanupTransformCase = () => {
+    window.removeEventListener('solomd:editor-history', onEditorHistory as EventListener);
     window.removeEventListener('solomd:transform-case', onTransformCase as EventListener);
     window.removeEventListener('solomd:format-markdown', onFormatMarkdown as EventListener);
     window.removeEventListener('solomd:editor-command', onEditorCommand as EventListener);
@@ -3977,11 +3986,37 @@ function onTransformCase(e: Event) {
  * differ in how they hand those over and write the result back.
  */
 function onFormatMarkdown(e: Event) {
-  const kind = ((e as CustomEvent).detail || {}).kind as FormatKind;
-  if (!FORMAT_KINDS.includes(kind)) return;
+  let kind = ((e as CustomEvent).detail || {}).kind as FormatKind | 'headingCycle';
   if (props.tab.id !== tabs.activeId) return;
   if (props.tab.language !== 'markdown') return;
+  // 5.0 touch keyboard bar: one heading button that steps
+  // paragraph → H1 → H2 → H3 → paragraph, each step an ordinary fmt.hN.
+  if (kind === 'headingCycle') {
+    const sel = currentFormatSelection();
+    if (!sel) return;
+    kind = nextHeadingKind(sel.doc, sel.from);
+  }
+  if (!FORMAT_KINDS.includes(kind)) return;
+  applyFormatKind(kind);
+}
 
+/** The text and selection the format commands work on, in either editor
+ *  (the plain block editor's are the active block's). */
+function currentFormatSelection(): { doc: string; from: number; to: number } | null {
+  if (!usePlainWindowsEditor) {
+    if (!view) return null;
+    const sel = view.state.selection.main;
+    return { doc: view.state.doc.toString(), from: sel.from, to: sel.to };
+  }
+  const el = plainLiveEnabled.value ? plainBlockEditors.value[plainActiveBlock.value] : plainEditor.value;
+  if (!el) return null;
+  return { doc: el.value, from: el.selectionStart ?? 0, to: el.selectionEnd ?? 0 };
+}
+
+/** Run one `fmt.*` command on this editor — the shortcut, the Insert menu,
+ *  the 5.0 selection bubble and the touch keyboard bar all land here. */
+function applyFormatKind(kind: FormatKind) {
+  if (props.tab.language !== 'markdown') return;
   if (!usePlainWindowsEditor) {
     if (!view) return;
     const sel = view.state.selection.main;
@@ -4026,6 +4061,85 @@ function onFormatMarkdown(e: Event) {
     el.scrollTop = keepScroll;
     emitPlainCursorAndSelection();
   });
+}
+
+// ── 5.0 selection bubble (SelectionBubble.vue) ─────────────────────────────
+// The bubble is editor-agnostic; these two readers are its view of whichever
+// editor this is. Both editors on Windows get it (IK6JCC rule).
+const bubbleHost = computed<HTMLElement | null>(() => (usePlainWindowsEditor ? plainHostEl.value : host.value));
+const bubbleEnabled = computed(
+  () =>
+    settings.selectionBubble &&
+    !isMobile() &&
+    props.tab.language === 'markdown' &&
+    settings.viewMode !== 'preview' &&
+    settings.viewMode !== 'reading',
+);
+
+/** The textarea that holds the caret on the plain path, if it has focus. */
+function focusedPlainTextarea(): HTMLTextAreaElement | null {
+  const el = plainLiveEnabled.value ? plainBlockEditors.value[plainActiveBlock.value] : plainEditor.value;
+  return el && document.activeElement === el ? el : null;
+}
+
+function readBubbleSelection(): BubbleSelection | null {
+  if (!usePlainWindowsEditor) {
+    if (!view || view.composing) return null;
+    if (!view.dom.contains(document.activeElement)) return null;
+    const sel = view.state.selection.main;
+    if (sel.empty) return null;
+    const doc = view.state.doc;
+    const a = doc.lineAt(sel.from).from;
+    const b = doc.lineAt(sel.to).to;
+    return { context: doc.sliceString(a, b), from: sel.from - a, to: sel.to - a, key: `${sel.from}:${sel.to}` };
+  }
+  const el = focusedPlainTextarea();
+  if (!el) return null;
+  const from = el.selectionStart ?? 0;
+  const to = el.selectionEnd ?? 0;
+  if (from === to) return null;
+  const c = lineContext(el.value, from, to);
+  const abs = plainAbsoluteSelection();
+  return { context: c.text, from: c.from, to: c.to, key: abs ? `${abs.from}:${abs.to}` : `${from}:${to}` };
+}
+
+function readBubbleRect(): Box | null {
+  if (!usePlainWindowsEditor) {
+    if (!view) return null;
+    const sel = view.state.selection.main;
+    const a = view.coordsAtPos(sel.from, 1);
+    const b = view.coordsAtPos(sel.to, -1);
+    if (!a || !b) return null;
+    if (b.top - a.top < 4) {
+      return { left: Math.min(a.left, b.left), right: Math.max(a.right, b.right), top: Math.min(a.top, b.top), bottom: Math.max(a.bottom, b.bottom) };
+    }
+    // Several lines: centre on the text column, from the first line's top to
+    // the last line's bottom.
+    const col = view.contentDOM.getBoundingClientRect();
+    return { left: col.left, right: col.right, top: a.top, bottom: b.bottom };
+  }
+  const el = focusedPlainTextarea();
+  if (!el) return null;
+  const box = selectionBoxPx(el, el.value, el.selectionStart ?? 0, el.selectionEnd ?? 0);
+  const r = el.getBoundingClientRect();
+  const cs = getComputedStyle(el);
+  const ox = r.left + el.clientLeft + parseFloat(cs.paddingLeft || '0') - el.scrollLeft;
+  const oy = r.top + el.clientTop + parseFloat(cs.paddingTop || '0') - el.scrollTop;
+  return { left: box.left + ox, right: box.right + ox, top: box.top + oy, bottom: box.bottom + oy };
+}
+
+/** Undo / redo from the touch keyboard bar, on either editor. */
+function onEditorHistory(e: Event) {
+  if (props.tab.id !== tabs.activeId) return;
+  const op = ((e as CustomEvent).detail || {}).op as 'undo' | 'redo';
+  if (!usePlainWindowsEditor) {
+    if (!view) return;
+    if (op === 'redo') cmRedo(view);
+    else cmUndo(view);
+    return;
+  }
+  if (op === 'redo') plainRedo();
+  else plainUndo();
 }
 
 /**
@@ -4103,14 +4217,37 @@ function onEditorCommand(e: Event) {
  * Ctrl+F, but had no toolbar / command-palette entry, so users thought it was
  * gone. PaneContent forwards `solomd:editor-find` here for the focused pane.
  */
-function openFind(): void {
+function findPanelLabels(): FindPanelLabels {
+  return {
+    find: t('plainFind.findPlaceholder'),
+    replace: t('plainFind.replacePlaceholder'),
+    prev: t('plainFind.prev'),
+    next: t('plainFind.next'),
+    matchCase: t('plainFind.matchCase'),
+    regexp: t('plainFind.regexp'),
+    wholeWord: t('plainFind.wholeWord'),
+    replaceOne: t('plainFind.replaceOne'),
+    replaceAll: t('plainFind.replaceAll'),
+    close: t('plainFind.close'),
+  };
+}
+
+function openFind(replace = false): void {
   if (usePlainWindowsEditor) {
-    openPlainFind();
+    openPlainFind(replace);
     return;
   }
   if (view) {
     view.focus();
     openSearchPanel(view);
+    // CodeMirror's panel always carries the replace row; "Replace" (Ctrl+H)
+    // only decides which field gets the caret. With nothing to find yet the
+    // find field is the one that needs typing first.
+    if (replace && getSearchQuery(view.state).search) {
+      const field = view.dom.querySelector<HTMLInputElement>('.cm-search input[name=replace]');
+      field?.focus();
+      field?.select();
+    }
   }
 }
 
@@ -4326,14 +4463,17 @@ onBeforeUnmount(() => {
 const tabCaretMemory = new Map<string, { caret: number; scrollTop: number }>();
 
 /**
- * F-10 — a document file.new / file.newText just made: no file, nothing in
- * it, and not a tab this editor has shown before (switching away records it
- * in tabCaretMemory). Only these take focus on the CodeMirror path; opening
- * or switching to a document leaves focus where it is, as before.
+ * F-10 — a document just made: nothing in it, and not a tab this editor has
+ * shown before (switching away records it in tabCaretMemory). That covers
+ * file.new / file.newText (no path yet) and New Note in Selected Folder,
+ * which names the file in the tree first, so it arrives with a path — it
+ * used to be left without focus and the first keystrokes went nowhere. Only
+ * these take focus on the CodeMirror path; opening or switching to a
+ * document with content leaves focus where it is, as before.
  */
 function isFreshUntitledTab(): boolean {
   const t = props.tab;
-  return !t.filePath && t.content === '' && t.savedContent === '' && !tabCaretMemory.has(t.id);
+  return t.content === '' && t.savedContent === '' && !tabCaretMemory.has(t.id);
 }
 
 function focusFreshCodeMirror() {
@@ -4474,15 +4614,6 @@ watch(
   (key) => {
     if (IS_APP_STORE_BUILD) return;
     view?.dispatch({ effects: aiKeyCompartment.reconfigure(aiRewriteExtension(key)) });
-  },
-);
-
-watch(
-  () => settings.language,
-  () => {
-    view?.dispatch({
-      effects: searchPhrasesCompartment.reconfigure(EditorState.phrases.of(searchPanelPhrases())),
-    });
   },
 );
 
@@ -4675,7 +4806,9 @@ watch(plainLiveEnabled, () => {
 });
 
 watch(
-  () => [plainLiveEnabled.value, plainText.value, plainActiveBlock.value, settings.theme, settings.language],
+  // renderDepsVersion: the blocks re-render when KaTeX / highlight.js land,
+  // which puts mermaid / PlantUML fences back to source — process them again.
+  () => [plainLiveEnabled.value, plainText.value, plainActiveBlock.value, settings.theme, settings.language, renderDepsVersion.value],
   () => {
     // No mermaid.initialize here any more: the render pass configures it with
     // the current theme itself, and doing it here would load the renderer for
@@ -4716,6 +4849,27 @@ function gotoLine(line: number) {
   view.dispatch({
     selection: { anchor: lineObj.from },
     effects: EditorView.scrollIntoView(lineObj.from, { y: 'start', yMargin: 40 }),
+  });
+  view.focus();
+}
+
+/** Put the caret at a 1-based line and column (session restore), both
+ *  clamped to the document, and bring it into view. */
+function setCaret(line: number, col: number) {
+  if (usePlainWindowsEditor) {
+    const start = plainLineStartOffset(line);
+    const lineText = plainText.value.slice(start).split('\n')[0] ?? '';
+    plainSetCaret(start + Math.max(0, Math.min(col - 1, lineText.length)));
+    plainScrollToLine(line);
+    return;
+  }
+  if (!view) return;
+  const safe = Math.max(1, Math.min(line, view.state.doc.lines));
+  const lineObj = view.state.doc.line(safe);
+  const pos = lineObj.from + Math.max(0, Math.min(col - 1, lineObj.length));
+  view.dispatch({
+    selection: { anchor: pos },
+    effects: EditorView.scrollIntoView(pos, { y: 'center' }),
   });
   view.focus();
 }
@@ -4951,13 +5105,14 @@ function insertMarkdown(snippet: string): void {
   view.focus();
 }
 
-defineExpose({ gotoLine, insertImageFromPath, insertImageUrl, uploadLocalImages, getViewLine, scrollToLine, lineTopY, insertMarkdown, openFind, applyFold, openTableAtCursor, openFormulaAtCursor });
+defineExpose({ gotoLine, setCaret, insertImageFromPath, insertImageUrl, uploadLocalImages, getViewLine, scrollToLine, lineTopY, insertMarkdown, openFind, applyFold, openTableAtCursor, openFormulaAtCursor });
 
 const cls = computed(() => ({
   'cm-host': true,
   'cm-host--dark': settings.theme === 'dark',
   // #109 — constrain the editing column to a centered readable width.
-  'cm-host--limit-width': settings.limitEditorWidth,
+  // 5.0 §5 — the column follows "fit to window width" when that is on.
+  'cm-host--limit-width': settings.limitEditorWidth && !settings.previewFitWidth,
   // #211 — soft-wrap fenced code in the LIVE-rendered blocks too. Only
   // Preview.vue carried `cb-wrap-on` before, so the code-block-wrap setting
   // silently did nothing in Live Edit (CodeMirror live blocks + the Windows
@@ -4976,6 +5131,7 @@ const cls = computed(() => ({
   ></div>
   <div
     v-else
+    ref="plainHostEl"
     class="plain-host"
     @mousedown.capture="onEditorMouseDownCapture"
     @contextmenu="onEditorContextMenu"
@@ -5166,18 +5322,19 @@ const cls = computed(() => ({
           @keydown.enter="onPlainFindEnter"
         />
         <span class="plain-find__count">{{ plainMatches.length ? (plainMatchIndex + 1) + '/' + plainMatches.length : '0/0' }}</span>
-        <button class="plain-find__btn" :title="t('plainFind.prev')" @click="gotoPlainMatch(-1)">‹</button>
-        <button class="plain-find__btn" :title="t('plainFind.next')" @click="gotoPlainMatch(1)">›</button>
+        <button class="plain-find__btn" :title="t('plainFind.prev')" :aria-label="t('plainFind.prev')" @click="gotoPlainMatch(-1)">‹</button>
+        <button class="plain-find__btn" :title="t('plainFind.next')" :aria-label="t('plainFind.next')" @click="gotoPlainMatch(1)">›</button>
         <button
           class="plain-find__btn"
           :class="{ 'plain-find__btn--on': plainFindCaseSensitive }"
-          :title="t('plainFind.matchCase')"
+          :title="t('plainFind.matchCase')" :aria-label="t('plainFind.matchCase')"
           @click="plainFindCaseSensitive = !plainFindCaseSensitive; revealPlainMatchFromAnchor()"
         >Aa</button>
-        <button class="plain-find__btn" :title="t('plainFind.close')" @click="closePlainFind(true)">✕</button>
+        <button class="plain-find__btn" :title="t('plainFind.close')" :aria-label="t('plainFind.close')" @click="closePlainFind(true)">✕</button>
       </div>
       <div class="plain-find__row">
         <input
+          ref="plainReplaceInput"
           class="plain-find__input"
           :value="plainReplaceValue"
           :placeholder="t('plainFind.replacePlaceholder')"
@@ -5209,6 +5366,13 @@ const cls = computed(() => ({
       </li>
     </ul>
   </div>
+  <SelectionBubble
+    :host="bubbleHost"
+    :enabled="bubbleEnabled"
+    :read="readBubbleSelection"
+    :rect="readBubbleRect"
+    @format="applyFormatKind"
+  />
   <Teleport to="body">
     <EditorContextMenu
       v-if="editorCtx"
@@ -5232,21 +5396,26 @@ const cls = computed(() => ({
   overflow: hidden;
   background: var(--bg);
 }
-/* #109 — readable editing column. Centre the CodeMirror content (and the
-   Windows plain-block editor) instead of letting long lines run full-bleed.
-   Width matches the preview pane's readable column (760px) so editor and
-   preview line up. */
+/* #109 / 5.0 §5 — readable editing column: `--measure` (680px) of text,
+   centred. .cm-content is border-box with 32px side padding plus CodeMirror's
+   own 6px+2px line padding, hence the arithmetic. The Windows plain editors
+   get the same column so both engines set the text identically. */
 .cm-host--limit-width :deep(.cm-content) {
-  max-width: 760px;
+  max-width: calc(var(--measure) + 72px);
   margin-left: auto;
   margin-right: auto;
 }
-.cm-host--limit-width.plain-block-editor :deep(.plain-block),
-.cm-host--limit-width.plain-block-editor :deep(.plain-block__textarea),
-.cm-host--limit-width :deep(.plain-editor) {
-  max-width: 760px;
+.cm-host--limit-width.plain-block-editor :deep(.plain-block) {
+  max-width: var(--measure);
   margin-left: auto;
   margin-right: auto;
+}
+/* The flat textarea is its own scroller: centre the text with padding rather
+   than a max-width, so the scrollbar stays at the pane edge. (% padding
+   resolves against the pane, which is the textarea's width.) */
+.cm-host--limit-width :deep(.plain-editor) {
+  padding-left: max(32px, calc((100% - var(--measure)) / 2));
+  padding-right: max(32px, calc((100% - var(--measure)) / 2));
 }
 :deep(.cm-editor) {
   height: 100%;
@@ -5378,12 +5547,14 @@ const cls = computed(() => ({
   border: 0;
   outline: none;
   box-sizing: border-box;
-  padding: 12px 16px;
+  /* 5.0 §5 — same surface as CodeMirror: 56px top, 32px sides, 30vh tail. */
+  padding: 56px 32px 30vh;
   background: var(--bg);
   color: var(--text);
-  font-family: var(--plain-editor-font-family, var(--font-editor, var(--font-mono)));
-  font-size: var(--plain-editor-font-size, 14px);
-  line-height: 1.6;
+  caret-color: var(--accent);
+  font-family: var(--plain-editor-font-family, var(--font-editor, var(--font-ui)));
+  font-size: var(--plain-editor-font-size, 16px);
+  line-height: 1.8;
   tab-size: 2;
   white-space: pre;
   overflow: auto;
@@ -5438,14 +5609,14 @@ const cls = computed(() => ({
   flex: none;
   overflow: hidden;
   box-sizing: border-box;
-  /* Top padding must match .plain-editor's 12px or numbers drift off rows. */
-  padding: 12px 8px 12px 0;
+  /* Top padding must match .plain-editor's 56px or numbers drift off rows. */
+  padding: 56px 8px 12px 0;
   border-right: 1px solid var(--border, rgba(127, 127, 127, 0.25));
   background: var(--bg);
   color: var(--text-faint, #999);
-  font-family: var(--plain-editor-font-family, var(--font-editor, var(--font-mono)));
-  font-size: var(--plain-editor-font-size, 14px);
-  line-height: 1.6;
+  font-family: var(--plain-editor-font-family, var(--font-editor, var(--font-ui)));
+  font-size: var(--plain-editor-font-size, 16px);
+  line-height: 1.8;
   text-align: right;
   user-select: none;
 }
@@ -5456,15 +5627,15 @@ const cls = computed(() => ({
   overflow: auto;
   /* Anchors the drawn caret (#316). */
   position: relative;
-  padding: 12px 16px 80px;
+  padding: 56px 32px 30vh;
   box-sizing: border-box;
-  font-family: var(--plain-editor-font-family, var(--font-editor, var(--font-mono)));
-  font-size: var(--plain-editor-font-size, 14px);
-  line-height: 1.6;
+  font-family: var(--plain-editor-font-family, var(--font-editor, var(--font-ui)));
+  font-size: var(--plain-editor-font-size, 16px);
+  line-height: 1.8;
 }
 .plain-block {
   position: relative;
-  min-height: 1.6em;
+  min-height: 1.8em;
   padding: 1px 0;
 }
 .plain-block--active {
@@ -5522,7 +5693,7 @@ const cls = computed(() => ({
 .plain-block__textarea {
   display: block;
   width: 100%;
-  min-height: 1.6em;
+  min-height: 1.8em;
   resize: none;
   border: 0;
   outline: none;
@@ -5535,8 +5706,9 @@ const cls = computed(() => ({
   font: inherit;
   /* #366 — same line pitch as the rendered block (.plain-block__render), so a
      paragraph keeps its height when clicked into. At the inherited 1.6 every
-     line shrank by 1.4px on activation: a 24-line block jumped ~34px. */
-  line-height: 1.7;
+     line shrank by 1.4px on activation: a 24-line block jumped ~34px.
+     5.0: both at the editor's 1.8. */
+  line-height: 1.8;
   tab-size: 2;
   white-space: pre;
 }
@@ -5544,8 +5716,13 @@ const cls = computed(() => ({
   white-space: pre-wrap;
   overflow-wrap: break-word;
 }
-.plain-block__textarea::selection {
-  background: rgba(255, 159, 64, 0.28);
+.plain-block__textarea::selection,
+.plain-editor::selection {
+  background: var(--accent-soft);
+}
+:root.window-inactive .plain-block__textarea::selection,
+:root.window-inactive .plain-editor::selection {
+  background: var(--select-inactive);
 }
 .plain-block__render {
   color: var(--text);
@@ -5555,31 +5732,34 @@ const cls = computed(() => ({
      different documents (only the focused line honored 字体/字号). Fall back
      to the old values for safety. */
   font-family: var(--plain-editor-font-family, var(--font-ui));
-  font-size: var(--plain-editor-font-size, 15px);
-  line-height: 1.7;
+  font-size: var(--plain-editor-font-size, 16px);
+  line-height: 1.8;
   padding: 0.05em 0;
 }
 .plain-block__render :deep(h1),
 .plain-block__render :deep(h2),
 .plain-block__render :deep(h3),
-.plain-block__render :deep(h4) {
-  font-weight: 700;
+.plain-block__render :deep(h4),
+.plain-block__render :deep(h5),
+.plain-block__render :deep(h6) {
+  font-weight: 600;
   line-height: 1.25;
   margin: 1.1em 0 0.45em;
 }
-.plain-block__render :deep(h1),
-.plain-block__render :deep(h2) {
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 0.25em;
-}
+/* 5.0 §2 type scale, in em of the body (30 / 20 / 17 at 16px) so a user's
+   font size still scales the whole page. Same values as Preview.vue and the
+   CodeMirror live view (lib/cm-live-render.ts). */
 .plain-block__render :deep(h1) {
-  font-size: 2em;
+  font-size: 1.875em;
+  font-weight: 650;
+  letter-spacing: -0.015em;
 }
 .plain-block__render :deep(h2) {
-  font-size: 1.5em;
+  font-size: 1.25em;
+  font-weight: 620;
 }
 .plain-block__render :deep(h3) {
-  font-size: 1.2em;
+  font-size: 1.0625em;
 }
 .plain-block__render :deep(p),
 .plain-block__render :deep(ul),
@@ -5594,28 +5774,34 @@ const cls = computed(() => ({
   white-space: pre-wrap;
 }
 .plain-block__render :deep(a) {
-  color: var(--accent);
-  text-decoration: none;
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent-text) 35%, transparent);
+  text-underline-offset: 3px;
 }
 .plain-block__render :deep(a:hover) {
-  text-decoration: underline;
+  text-decoration-color: currentColor;
 }
 .plain-block__render :deep(code) {
   font-family: var(--font-mono);
-  font-size: 0.9em;
-  background: var(--bg-hover);
-  padding: 0.15em 0.4em;
-  border-radius: 4px;
+  font-size: 0.875em;
+  color: var(--text);
+  background: var(--fill-1);
+  padding: 0.12em 0.35em;
+  border-radius: var(--r-xs);
 }
 .plain-block__render :deep(pre) {
   font-family: var(--font-mono);
-  background: var(--bg-hover);
+  font-size: 0.8125em;
+  line-height: 1.6;
+  background: var(--bg-elev);
   padding: 14px 16px;
-  border-radius: 6px;
+  border-radius: var(--r-lg);
   overflow-x: auto;
 }
 .plain-block__render :deep(pre code) {
   display: block;
+  font-size: inherit;
   background: transparent;
   padding: 0;
 }
@@ -5667,13 +5853,22 @@ const cls = computed(() => ({
   -webkit-user-select: none;
 }
 .plain-block__render :deep(blockquote) {
-  border-left: 3px solid var(--accent);
-  padding: 0.2em 1em;
-  color: var(--text-muted);
+  margin-left: 0;
+  margin-right: 0;
+  padding: 12px 16px;
+  background: var(--bg-elev);
+  border-radius: var(--r-lg);
+  color: var(--text-2);
+}
+.plain-block__render :deep(blockquote > :last-child) {
+  margin-bottom: 0;
 }
 .plain-block__render :deep(ul),
 .plain-block__render :deep(ol) {
   padding-left: 1.6em;
+}
+.plain-block__render :deep(li::marker) {
+  color: var(--text-3);
 }
 .plain-block__render :deep(table) {
   border-collapse: collapse;
@@ -5685,12 +5880,12 @@ const cls = computed(() => ({
   padding: 6px 12px;
 }
 .plain-block__render :deep(thead th) {
-  background: var(--bg-soft);
+  background: var(--bg-elev);
   font-weight: 600;
 }
 .plain-block__render :deep(hr) {
   border: none;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--hairline);
   margin: 1.6em 0;
 }
 .plain-block__render :deep(img) {
