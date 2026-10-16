@@ -2580,7 +2580,10 @@ function onSelectPdfFont(v: string) {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 24px 12px;
+  /* 4px on top: the modal body scrolls (overflow-y: auto) with no padding,
+     which clipped the top edge of the input's focus ring. The header gives
+     the same 4px back (see .ds-modal.settings-modal .ds-modal__head). */
+  padding: 4px 24px 12px;
   border-bottom: var(--bd-hair);
 }
 .settings__search-input {
@@ -3133,7 +3136,9 @@ input[type='range']:disabled {
   background: var(--bg);
 }
 .ds-modal.settings-modal .ds-modal__head {
-  padding-bottom: 10px;
+  /* 10px total gap to the search row; 4px of it lives in .settings__search
+     so the focus ring is not clipped by the scrolling body. */
+  padding-bottom: 6px;
 }
 .ds-modal.settings-modal .ds-modal__body {
   padding: 0;

@@ -229,6 +229,9 @@ export const useTabsStore = defineStore('tabs', {
       };
       this.tabs.push(tab);
       this.activeId = tab.id;
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('solomd:leave-center-overlay'));
+      }
       return tab;
     },
     openFromDisk(payload: {
@@ -253,6 +256,9 @@ export const useTabsStore = defineStore('tabs', {
         // dialog owns that case.
         if (existing.content === existing.savedContent) {
           this.applyDiskRead(existing.id, payload);
+        }
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('solomd:leave-center-overlay'));
         }
         return existing;
       }
@@ -283,6 +289,9 @@ export const useTabsStore = defineStore('tabs', {
       };
       this.tabs.push(tab);
       this.activeId = tab.id;
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('solomd:leave-center-overlay'));
+      }
       return tab;
     },
     /** #317 — apply a fresh read of the file to an open tab. The tab ends up
@@ -427,6 +436,9 @@ export const useTabsStore = defineStore('tabs', {
     },
     activate(id: string) {
       this.activeId = id;
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('solomd:leave-center-overlay'));
+      }
     },
     /** The most recently closed tab, removed from the reopen stack. */
     popClosedTab(): ClosedTabRecord | undefined {
