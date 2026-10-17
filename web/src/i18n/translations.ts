@@ -172,7 +172,7 @@ export const t = {
         },
         {
           q: 'Does SoloMD work on Android and iOS?',
-          a: 'Yes. SoloMD 5.0.0 ships native Android (API 24+, ARM64 + ARMv7 + x86_64) and iOS (15+) builds. Android is on Google Play (play.google.com/store/apps/details?id=app.solomd) and as a sideload .apk on GitHub Releases. iOS and iPadOS are on the App Store (apps.apple.com/app/id6762498874). Both mobile builds support live preview, Wiki links, AI rewrite, and folder-based sync via iCloud / Files / SD card.',
+          a: 'Yes. SoloMD 5.0.2 ships native Android (API 24+, ARM64 + ARMv7 + x86_64) and iOS (15+) builds. Android is on Google Play (play.google.com/store/apps/details?id=app.solomd) and as a sideload .apk on GitHub Releases. iOS and iPadOS are on the App Store (apps.apple.com/app/id6762498874). Both mobile builds support live preview, Wiki links, AI rewrite, and folder-based sync via iCloud / Files / SD card.',
         },
         {
           q: 'Does SoloMD work offline?',
@@ -541,7 +541,7 @@ export const t = {
         },
         {
           q: 'SoloMD 支持 Android 和 iOS 吗？',
-          a: '支持。SoloMD 5.0.0 提供原生 Android(API 24+,ARM64 + ARMv7 + x86_64)和 iOS(15+)版本。Android 已上架 Google Play(play.google.com/store/apps/details?id=app.solomd),也可在 GitHub Releases 下载 .apk 侧载。iOS 和 iPadOS 在 App Store 上架(apps.apple.com/app/id6762498874)。两个移动端都支持实时预览、Wiki 链接、AI 改写,通过 iCloud / 文件 / SD 卡做文件夹同步。',
+          a: '支持。SoloMD 5.0.2 提供原生 Android(API 24+,ARM64 + ARMv7 + x86_64)和 iOS(15+)版本。Android 已上架 Google Play(play.google.com/store/apps/details?id=app.solomd),也可在 GitHub Releases 下载 .apk 侧载。iOS 和 iPadOS 在 App Store 上架(apps.apple.com/app/id6762498874)。两个移动端都支持实时预览、Wiki 链接、AI 改写,通过 iCloud / 文件 / SD 卡做文件夹同步。',
         },
         {
           q: 'SoloMD 能离线用吗？',

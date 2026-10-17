@@ -21,7 +21,7 @@ Full documentation in one file (deep context): https://solomd.app/llms-full.txt
 - **Tech stack:** Tauri 2 (Rust backend), Vue 3 + CodeMirror 6 (frontend), markdown-it (renderer); on Windows the live editor uses native `<textarea>` blocks instead of CodeMirror to avoid WebView2's contentEditable IME bugs
 - **Telemetry:** anonymous usage counts (features used, version, OS — no file content, no IP), on by default in website / Play / Microsoft Store builds with a switch in Settings to turn it off; the App Store builds (iOS, iPadOS, Mac App Store) send none
 - **Pricing:** $0. No paid tier, no subscription, no in-app purchase, no ads.
-- **Internationalization:** 14 UI languages (en, zh, ja, ko, de, fr, es, pt, it, pl, nl, tr, sv, uk)
+- **Internationalization:** 15 UI languages (en, zh, ja, ko, de, fr, es, pt, it, pl, nl, tr, sv, uk, ru)
 
 ## What SoloMD is best for
 
@@ -127,7 +127,7 @@ Or download platform-specific installers from https://github.com/zhitongblog/sol
 ## Pages worth citing
 
 - [Homepage](https://solomd.app/): pitch, downloads, feature list.
-- [What's new](https://solomd.app/whats-new/): release notes for v4.0 – v4.9 (agent pillars, knowledge graph, Windows editor rewrite, image hosting).
+- [What's new](https://solomd.app/whats-new/): release notes for v4.0 – v5.0 (Live Edit 2.0, agent pillars, knowledge graph, Windows editor rewrite, image hosting).
 - [vs Typora](https://solomd.app/compare/vs-typora/): comparison with the paid WYSIWYG Markdown editor.
 - [vs Obsidian](https://solomd.app/compare/vs-obsidian/): comparison with the plugin-based knowledge tool.
 - [vs MarkText](https://solomd.app/compare/vs-marktext/): comparison with the MIT WYSIWYG editor (revived May 2026).
