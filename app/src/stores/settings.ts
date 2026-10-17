@@ -95,6 +95,7 @@ interface Settings {
    *  restores all previously-enabled panes in their previous state. */
   rightSidebarHidden: boolean;
   livePreview: boolean;
+  v503SourceModeMigrated?: boolean;
   // Editor super features
   spellCheck: boolean;
   focusMode: boolean;
@@ -603,7 +604,8 @@ function defaults(): Settings {
     // 5.0 — writing first: a new install opens on the text alone; the right
     // sidebar is one click (or ⌘⌥B) away. Saved settings are untouched.
     rightSidebarHidden: true,
-    livePreview: true,
+    livePreview: false,
+    v503SourceModeMigrated: true,
     spellCheck: true,
     focusMode: false,
     toolbarHidden: false,
@@ -889,6 +891,10 @@ function load(): Settings {
       if (!parsed.v491MobileLayoutMigrated) {
         if (isMobile()) merged.rightSidebarHidden = true;
         merged.v491MobileLayoutMigrated = true;
+      }
+      if (!parsed.v503SourceModeMigrated) {
+        merged.livePreview = false;
+        merged.v503SourceModeMigrated = true;
       }
       // D6 — a theme outside the built-in list (e.g. a hand-edited or
       // MCP-written 'system') rendered as a bare white page; reset it to the
@@ -1189,8 +1195,12 @@ export const useSettingsStore = defineStore('settings', {
       }
     },
     toggleLivePreview() {
-      this.livePreview = !this.livePreview;
-      this.persist();
+      if (this.viewMode === 'split') {
+        this.livePreview = !this.livePreview;
+        this.persist();
+        return;
+      }
+      this.setViewMode(this.viewMode === 'liveEdit' ? 'edit' : 'liveEdit');
     },
     toggleSpellCheck() {
       this.spellCheck = !this.spellCheck;

@@ -3619,41 +3619,52 @@ function richExtensionsFor(tab: Tab) {
     // lines + GFM tables into block widgets when the cursor is elsewhere.
     // Cursor enters → widget unmounts → source returns. Image paths
     // resolve via the same extractImageRoot used by Preview/Export.
-    return liveEditExtension([
-      liveBlocksExtension({
-        getImageRoot: () => extractImageRoot(tab.content || ''),
-        getFilePath: () => tab.filePath,
-        // F7 — live tldraw whiteboard theme + writeback.
-        getBoardTheme: () => ({
-          colorScheme: settings.theme === 'dark' ? 'dark' : 'light',
-          locale: settings.language || 'en',
+    return [
+      ...liveEditExtension([
+        liveBlocksExtension({
+          getImageRoot: () => extractImageRoot(tab.content || ''),
+          getFilePath: () => tab.filePath,
+          // F7 — live tldraw whiteboard theme + writeback.
+          getBoardTheme: () => ({
+            colorScheme: settings.theme === 'dark' ? 'dark' : 'light',
+            locale: settings.language || 'en',
+          }),
+          getTabId: () => tab.id,
+          // #354 — diagrams follow the app's light/dark family, like preview.
+          getMermaidTheme: () => mermaidThemeFor(settings.theme),
+          getPlantuml: () => ({
+            enabled: settings.plantumlEnabled,
+            server: settings.plantumlServer,
+          }),
+          // #353 — "Always show Markdown markers": keep every block's source.
+          keepSource: () => settings.alwaysShowMarkers,
+          getBoardStrings: () => ({
+            loading: t('whiteboard.loading'),
+            openFull: t('whiteboard.openFull'),
+            loadFailed: t('whiteboard.loadFailed'),
+          }),
+          onBoardEdit: (boardId, snapshotJson) => {
+            const cur = tabs.tabs.find((x) => x.id === tab.id);
+            if (!cur) return;
+            const next = replaceBoardSnapshot(cur.content || '', boardId, snapshotJson);
+            if (next !== cur.content) tabs.setContent(tab.id, next);
+          },
         }),
-        getTabId: () => tab.id,
-        // #354 — diagrams follow the app's light/dark family, like preview.
-        getMermaidTheme: () => mermaidThemeFor(settings.theme),
-        getPlantuml: () => ({
-          enabled: settings.plantumlEnabled,
-          server: settings.plantumlServer,
-        }),
-        // #353 — "Always show Markdown markers": keep every block's source.
-        keepSource: () => settings.alwaysShowMarkers,
-        getBoardStrings: () => ({
-          loading: t('whiteboard.loading'),
-          openFull: t('whiteboard.openFull'),
-          loadFailed: t('whiteboard.loadFailed'),
-        }),
-        onBoardEdit: (boardId, snapshotJson) => {
-          const cur = tabs.tabs.find((x) => x.id === tab.id);
-          if (!cur) return;
-          const next = replaceBoardSnapshot(cur.content || '', boardId, snapshotJson);
-          if (next !== cur.content) tabs.setContent(tab.id, next);
-        },
-      }),
-      liveBlocksTheme,
-    ], { showMarkers: settings.alwaysShowMarkers });
+        liveBlocksTheme,
+      ], { showMarkers: settings.alwaysShowMarkers }),
+      ...(settings.alwaysShowMarkers ? [] : [taskListExtension(), wikilinkExtension()]),
+    ];
+  }
+  // In 'edit' (源码 / Source mode), always render raw Markdown source — never
+  // hide markers, enlarge headings, or swap task/wikilink syntax for widgets.
+  if (settings.viewMode === 'edit') {
+    return richHighlightOnly();
   }
   return settings.livePreview
-    ? livePreviewExtension({ showMarkers: settings.alwaysShowMarkers })
+    ? [
+        ...livePreviewExtension({ showMarkers: settings.alwaysShowMarkers }),
+        ...(settings.alwaysShowMarkers ? [] : [taskListExtension(), wikilinkExtension()]),
+      ]
     : richHighlightOnly();
 }
 
@@ -3775,7 +3786,6 @@ function buildExtensions() {
     imagePasteExtension(imagePasteOpts()),
     ...(!windowsImeSafeMode && props.tab.language === 'markdown' && !markdownSafeMode
       ? [
-          wikilinkExtension(),
           tagAutocompleteExtension(),
           citationsExtension(() => cachedCitations),
           // #297 — opens itself on the third backtick of a fence opener.
@@ -3804,7 +3814,6 @@ function buildExtensions() {
           slashCompartment.of(slashExt()),
         ]
       : []),
-    ...(windowsImeSafeMode || markdownSafeMode ? [] : [taskListExtension()]),
     foldCompartment.of(foldExtensionFor(settings.foldingEnabled)),
     sessionRestoreExtension(props.tab.id),
     // #167 — clicks during async widget renders (post tab-switch) must not

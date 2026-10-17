@@ -1088,7 +1088,7 @@ function onSelectPdfFont(v: string) {
 
         <section data-cat="basics">
           <label>
-            <input type="checkbox" :checked="settings.livePreview" @change="settings.toggleLivePreview()" />
+            <input type="checkbox" :checked="settings.viewMode === 'liveEdit' || (settings.viewMode === 'split' && settings.livePreview)" @change="settings.toggleLivePreview()" />
             {{ t('settings.livePreview') }}
           </label>
         </section>
