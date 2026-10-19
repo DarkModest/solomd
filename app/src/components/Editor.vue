@@ -1388,6 +1388,9 @@ function syncPlainEditorAfterModeSwitch() {
 function handlePlainInput(event: Event) {
   if (plainLiveEnabled.value) return;
   const el = event.target as HTMLTextAreaElement;
+  if (plainComposing.value && (event as InputEvent).isComposing === false) {
+    plainComposing.value = false;
+  }
   if (!plainComposing.value) {
     recordPlainHistory();
     // Ordered-list numbers follow a line added or removed (lib/list-renumber).
@@ -2255,7 +2258,10 @@ function plainFirstRowEnd(el: HTMLTextAreaElement, text: string): number {
 
 function handlePlainBlockKeydown(index: number, event: KeyboardEvent) {
   if (plainComposing.value) {
-    if ((event.ctrlKey || event.metaKey) && !event.isComposing) {
+    if (
+      (!event.isComposing && event.key !== 'Process' && event.keyCode !== 229) ||
+      ((event.ctrlKey || event.metaKey) && !event.isComposing)
+    ) {
       plainComposing.value = false;
     } else {
       return;
@@ -2400,7 +2406,10 @@ function handlePlainBlockKeydown(index: number, event: KeyboardEvent) {
 
 function handlePlainEditorKeydown(event: KeyboardEvent) {
   if (plainComposing.value) {
-    if ((event.ctrlKey || event.metaKey) && !event.isComposing) {
+    if (
+      (!event.isComposing && event.key !== 'Process' && event.keyCode !== 229) ||
+      ((event.ctrlKey || event.metaKey) && !event.isComposing)
+    ) {
       plainComposing.value = false;
     } else {
       return;
@@ -2832,6 +2841,9 @@ function handlePlainBlockInput(index: number, event: Event) {
   const el = event.target as HTMLTextAreaElement;
   autoSizePlainBlock(el);
   schedulePlainOverlays();
+  if (plainComposing.value && (event as InputEvent).isComposing === false) {
+    plainComposing.value = false;
+  }
   if (plainComposing.value) return;
   // Before updatePlainBlock: a re-split can swap this textarea for another.
   noteTypedInTextarea(el, event);
@@ -2853,6 +2865,17 @@ function handlePlainBlockCompositionEnd(index: number, event: CompositionEvent) 
   const el = event.target as HTMLTextAreaElement;
   autoSizePlainBlock(el);
   updatePlainBlock(index, el.value, el.selectionStart ?? el.value.length);
+}
+
+function handlePlainEditorCompositionEnd(event: CompositionEvent) {
+  plainComposing.value = false;
+  schedulePlainOverlays();
+  handlePlainInput(event);
+}
+
+function handlePlainBlur() {
+  plainComposing.value = false;
+  schedulePlainOverlays();
 }
 
 /**
@@ -5320,7 +5343,7 @@ const cls = computed(() => ({
           @compositionstart="handlePlainBlockCompositionStart"
           @compositionend="(event) => handlePlainBlockCompositionEnd(index, event)"
           @click.stop
-          @blur="schedulePlainOverlays"
+          @blur="handlePlainBlur"
           @keyup="emitPlainCursorAndSelection"
           @mouseup="emitPlainCursorAndSelection"
           @select="emitPlainCursorAndSelection"
@@ -5386,9 +5409,11 @@ const cls = computed(() => ({
         @keydown="handlePlainEditorKeydown"
         @paste="handlePlainPaste"
         @input="handlePlainInput"
+        @compositionstart="handlePlainBlockCompositionStart"
+        @compositionend="handlePlainEditorCompositionEnd"
         @scroll="onPlainScroll"
         @mousedown="$event.button === 0 && clearStrayDocumentSelection($event.currentTarget as HTMLElement)"
-        @blur="schedulePlainOverlays"
+        @blur="handlePlainBlur"
         @keyup="emitPlainCursorAndSelection"
         @mouseup="emitPlainCursorAndSelection"
         @select="emitPlainCursorAndSelection"
