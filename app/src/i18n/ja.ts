@@ -2147,6 +2147,7 @@ export const ja: I18n = {
       saveAs: '名前を付けて保存…',
       openFolder: 'フォルダーを開く…',
       closeTab: 'タブを閉じる',
+      print: '印刷…',
       openExternal: '外部エディターで開く',
     },
     view: {

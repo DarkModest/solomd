@@ -2138,6 +2138,7 @@ export const ru: I18n = {
       saveAs: 'Сохранить как…',
       openFolder: 'Открыть папку…',
       closeTab: 'Закрыть вкладку',
+      print: 'Печать…',
       openExternal: 'Открыть во внешнем редакторе',
     },
     view: {

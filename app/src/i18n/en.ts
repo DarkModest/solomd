@@ -2177,6 +2177,7 @@ export const en = {
       openFolder: 'Open Folder…',
       closeTab: 'Close Tab',
       openExternal: 'Open in External Editor',
+      print: 'Print…',
     },
     view: {
       editor: 'View: Edit Only',

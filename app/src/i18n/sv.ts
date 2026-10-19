@@ -2164,6 +2164,7 @@ export const sv: I18n = {
       saveAs: 'Spara som…',
       openFolder: 'Öppna mapp…',
       closeTab: 'Stäng flik',
+      print: 'Skriv ut…',
       openExternal: 'Öppna i extern redigerare',
     },
     view: {

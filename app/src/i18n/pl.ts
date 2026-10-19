@@ -2164,6 +2164,7 @@ export const pl: I18n = {
       saveAs: 'Zapisz jako…',
       openFolder: 'Otwórz folder…',
       closeTab: 'Zamknij kartę',
+      print: 'Drukuj…',
       openExternal: 'Otwórz w zewnętrznym edytorze',
     },
     view: {

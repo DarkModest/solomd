@@ -2149,6 +2149,7 @@ export const pt: I18n = {
       saveAs: 'Salvar como…',
       openFolder: 'Abrir pasta…',
       closeTab: 'Fechar aba',
+      print: 'Imprimir…',
       openExternal: 'Abrir em editor externo',
     },
     view: {

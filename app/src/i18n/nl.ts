@@ -2164,6 +2164,7 @@ export const nl: I18n = {
       saveAs: 'Opslaan als…',
       openFolder: 'Map openen…',
       closeTab: 'Tabblad sluiten',
+      print: 'Afdrukken…',
       openExternal: 'Openen in externe editor',
     },
     view: {

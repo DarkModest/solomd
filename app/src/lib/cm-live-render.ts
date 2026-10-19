@@ -374,8 +374,9 @@ function buildDecorations(view: EditorView, showMarkers = false): DecorationSet 
         }
 
         // ---- URL: hide only when it's the destination part of a real
-        //      `[label](url)` link. Autolinks (`<https://x.com>`) make
-        //      the URL the visible text, so we leave it alone there. ----
+        //      `[label](url)` link. Bare GFM URLs (`https://x.com`) and
+        //      autolinks (`<https://x.com>`) make the URL the visible link
+        //      text, so they get `linkMark` (#431). ----
         if (name === 'URL') {
           const parent = node.node.parent;
           // GFM also emits a URL node for a URL-valued label (#395).
@@ -383,8 +384,14 @@ function buildDecorations(view: EditorView, showMarkers = false): DecorationSet 
           const previous = node.node.prevSibling;
           const inLabeledLink = parent?.name === 'Link' && previous?.name === 'LinkMark' &&
             view.state.doc.sliceString(previous.from, previous.to) === '(';
-          if (inLabeledLink && !showMarkers && !caretTouches && nTo > nFrom) {
-            ranges.push(hideDeco.range(nFrom, nTo));
+          if (inLabeledLink) {
+            if (!showMarkers && !caretTouches && nTo > nFrom) {
+              ranges.push(hideDeco.range(nFrom, nTo));
+            } else if (nTo > nFrom) {
+              ranges.push(markerMark.range(nFrom, nTo));
+            }
+          } else if (nTo > nFrom) {
+            ranges.push(linkMark.range(nFrom, nTo));
           }
           return;
         }
@@ -622,7 +629,7 @@ const liveEditHighlightStyle = HighlightStyle.define([
   { tag: t.emphasis, fontStyle: 'italic', color: 'var(--md-em)' },
   { tag: t.strikethrough, textDecoration: 'line-through', color: 'var(--text-muted)' },
   { tag: t.link, color: 'var(--accent-text)' },
-  { tag: t.url, color: 'var(--text-3)' },
+  { tag: t.url, color: 'var(--accent-text)' },
   { tag: t.monospace, fontFamily: 'var(--font-mono)', color: 'var(--text)' },
   { tag: t.quote, color: 'var(--text-2)' },
   { tag: t.contentSeparator, color: 'var(--text-3)' },
