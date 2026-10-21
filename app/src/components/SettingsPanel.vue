@@ -50,6 +50,8 @@ import CloudFolderBanner from './CloudFolderBanner.vue';
 import ProxySettings from './ProxySettings.vue';
 import LanguageToolSettings from './LanguageToolSettings.vue';
 import ThemeMarketplace from './ThemeMarketplace.vue';
+import SupportDialog from './SupportDialog.vue';
+import { supporterRecord, badgeInfoForTier, initSupporterState } from '../lib/supporter';
 import { isIOS, isMobile, hasGitBackend, isWindowsEditorRuntime, resolveWindowsEditorEngine } from '../lib/platform';
 import type { WindowsEditorEngine } from '../lib/platform';
 import { loadCustomTheme } from '../lib/custom-theme';
@@ -79,7 +81,11 @@ const autoEngineName = computed(() =>
     : t('settings.windowsEditorEngineNameNative'),
 );
 
-const { t } = useI18n();
+const { t, lang } = useI18n();
+const supportModalOpen = ref(false);
+const isZhLocale = computed(() => String(lang.value || '').startsWith('zh'));
+const activeSupporterBadge = computed(() => badgeInfoForTier(supporterRecord.value.tier, isZhLocale.value));
+void initSupporterState();
 // #180 — the chord in this sentence comes from the user's bindings, not from
 // a literal baked into the translation.
 const macChord = usesCommandKey();
@@ -930,6 +936,21 @@ function onSelectPdfFont(v: string) {
           >
             <Icons class="settings__nav-icon" :name="c.icon" :size="16" />
             <span class="settings__nav-label">{{ t(c.labelKey) }}</span>
+          </button>
+          <button
+            type="button"
+            class="settings__nav-item settings__nav-supporter"
+            :class="{ 'settings__nav-supporter--active': Boolean(activeSupporterBadge) }"
+            @click="supportModalOpen = true"
+          >
+            <Icons class="settings__nav-icon" name="heart" :size="16" />
+            <span class="settings__nav-label">
+              {{
+                activeSupporterBadge
+                  ? `${activeSupporterBadge.icon} ${activeSupporterBadge.label}`
+                  : t('about.sponsor')
+              }}
+            </span>
           </button>
         </nav>
       <div
@@ -2378,6 +2399,10 @@ function onSelectPdfFont(v: string) {
     <ThemeMarketplace
       :open="themeMarketplaceOpen"
       @close="themeMarketplaceOpen = false"
+    />
+    <SupportDialog
+      :open="supportModalOpen"
+      @close="supportModalOpen = false"
     />
   </DsModal>
 </template>

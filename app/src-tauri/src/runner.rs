@@ -144,6 +144,8 @@ mod app_build;
 // App Store builds ask for a rating with Apple's own sheet.
 #[path = "store_review.rs"]
 mod store_review;
+#[path = "iap.rs"]
+mod iap;
 #[path = "ios_folder.rs"]
 mod ios_folder;
 // #295 — Windows portable mode (`data` folder next to the exe).
@@ -788,6 +790,10 @@ pub fn run_with(initial_file: Option<String>) {
             // about-dialog build info (was lib.rs-only too).
             app_build::app_build_info,
             store_review::request_store_review,
+            iap::iap_get_state,
+            iap::iap_fetch_products,
+            iap::iap_purchase,
+            iap::iap_restore,
             ios_folder::ios_pick_folder,
             ios_folder::macos_bookmark_folder,
             ios_folder::ios_restore_folder,
