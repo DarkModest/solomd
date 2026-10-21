@@ -639,7 +639,7 @@ mod android {
                 env.call_static_method(cls, method, "()Ljava/lang/String;", &[])
             };
             if env.exception_check().unwrap_or(false) {
-                let _ = env.exception_Clear();
+                let _ = env.exception_clear();
                 return Err(format!("JNI exception in MainActivity.{method}"));
             }
             let obj = val.map_err(|e| e.to_string())?.l().map_err(|e| e.to_string())?;
@@ -727,7 +727,7 @@ pub fn iap_get_state() -> Result<IapState, String> {
         let purchased_ids = unsafe { apple::load_purchased_ids() };
         return Ok(IapState {
             supported: true,
-            is_store_build: crate::app_build::IS_APP_STORE || cfg!(target_os = "ios"),
+            is_store_build: super::app_build::IS_APP_STORE || cfg!(target_os = "ios"),
             purchased_ids,
         });
     }
