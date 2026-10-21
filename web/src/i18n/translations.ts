@@ -152,7 +152,7 @@ export const t = {
       items: [
         {
           q: 'Is SoloMD really free?',
-          a: 'Yes. SoloMD is MIT-licensed open-source software at https://github.com/zhitongblog/solomd. There is no paid tier, no subscription, no in-app purchase, and no ads. Compare: Typora costs $14.99, iA Writer costs $29.99, Obsidian Sync is $4/month. SoloMD is $0 forever — sponsor the developer if it helps your writing.',
+          a: 'Yes. SoloMD is MIT-licensed open-source software at https://github.com/zhitongblog/solomd. There is no paid tier, no subscription, no feature paywalls, and no ads. Compare: Typora costs $14.99, iA Writer costs $29.99, Obsidian Sync is $4/month. Every SoloMD feature is $0 forever — optional one-time in-app tips on macOS, iOS, and Android exist purely to support independent development and unlock the "✨ Supporter" badge.',
         },
         {
           q: 'Is there a free alternative to Typora?',
@@ -521,7 +521,7 @@ export const t = {
       items: [
         {
           q: 'SoloMD 真的免费吗？',
-          a: '是的。SoloMD 是 MIT 协议开源软件,源码在 https://github.com/zhitongblog/solomd。没有付费版,没有订阅,没有内购,没有广告。对比:Typora $14.99、iA Writer $29.99、Obsidian Sync 每月 $4。SoloMD 永远 $0 —— 如果对你有帮助,可以赞助开发者一杯咖啡的钱。',
+          a: '是的。SoloMD 是 MIT 协议开源软件,源码在 https://github.com/zhitongblog/solomd。没有付费版,没有订阅,没有任何功能锁,没有广告。对比:Typora $14.99、iA Writer $29.99、Obsidian Sync 每月 $4。SoloMD 所有功能永远 $0 —— 应用商店版本(macOS / iOS / Android)内提供的 3 档一次性内购仅用于自愿赞赏支持独立开发,并永久点亮应用内的「✨ 支持者」徽章。',
         },
         {
           q: '有没有免费的 Typora 替代品？',
