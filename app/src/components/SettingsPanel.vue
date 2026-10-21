@@ -51,7 +51,7 @@ import ProxySettings from './ProxySettings.vue';
 import LanguageToolSettings from './LanguageToolSettings.vue';
 import ThemeMarketplace from './ThemeMarketplace.vue';
 import SupportDialog from './SupportDialog.vue';
-import { supporterRecord, badgeInfoForTier, initSupporterState } from '../lib/supporter';
+import { supporterRecord, badgeInfo, initSupporterState } from '../lib/supporter';
 import { isIOS, isMobile, hasGitBackend, isWindowsEditorRuntime, resolveWindowsEditorEngine } from '../lib/platform';
 import type { WindowsEditorEngine } from '../lib/platform';
 import { loadCustomTheme } from '../lib/custom-theme';
@@ -84,7 +84,7 @@ const autoEngineName = computed(() =>
 const { t, lang } = useI18n();
 const supportModalOpen = ref(false);
 const isZhLocale = computed(() => String(lang.value || '').startsWith('zh'));
-const activeSupporterBadge = computed(() => badgeInfoForTier(supporterRecord.value.tier, isZhLocale.value));
+const activeSupporterBadge = computed(() => badgeInfo(supporterRecord.value.active, isZhLocale.value));
 void initSupporterState();
 // #180 — the chord in this sentence comes from the user's bindings, not from
 // a literal baked into the translation.

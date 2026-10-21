@@ -9,7 +9,7 @@ import {
   storeProducts,
   iapUseStoreFlow,
   iapNativeSupported,
-  badgeInfoForTier,
+  badgeInfo,
   fetchStoreProducts,
   purchaseTipTier,
   restoreSupporterPurchases,
@@ -28,7 +28,7 @@ const restoring = ref(false);
 const feedbackMsg = ref<string | null>(null);
 const feedbackKind = ref<'ok' | 'err'>('ok');
 
-const activeBadge = computed(() => badgeInfoForTier(supporterRecord.value.tier, isZh.value));
+const activeBadge = computed(() => badgeInfo(supporterRecord.value.active, isZh.value));
 
 watch(
   () => props.open,
@@ -72,8 +72,8 @@ async function handleSelectTier(tier: TipTierSpec) {
       if (res.status === 'purchased' || res.status === 'restored') {
         feedbackKind.value = 'ok';
         feedbackMsg.value = isZh.value
-          ? `🎉 感谢你的支持！已为你点亮「${tier.badgeZh}」专属徽章。`
-          : `🎉 Thank you for supporting SoloMD! Your "${tier.badgeEn}" badge is now active.`;
+          ? '🎉 感谢你的支持！已为你点亮专属「✨ 支持者」徽章。'
+          : '🎉 Thank you for supporting SoloMD! Your "✨ Supporter" badge is now active.';
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err || '');
@@ -97,8 +97,8 @@ async function handleSelectTier(tier: TipTierSpec) {
   activateSupporterBadgeLocally(tier.productId);
   feedbackKind.value = 'ok';
   feedbackMsg.value = isZh.value
-    ? `✨ 已为你点亮「${tier.badgeZh}」徽章，感谢支持独立开发！`
-    : `✨ Your "${tier.badgeEn}" badge is now active. Thank you for supporting SoloMD!`;
+    ? '✨ 已为你点亮「支持者」徽章，感谢支持独立开发！'
+    : '✨ Your "Supporter" badge is now active. Thank you for supporting SoloMD!';
 }
 
 async function handleRestore() {
@@ -107,12 +107,11 @@ async function handleRestore() {
   feedbackMsg.value = null;
   try {
     const rec = await restoreSupporterPurchases();
-    if (rec.active && rec.tier) {
-      const info = badgeInfoForTier(rec.tier, isZh.value);
+    if (rec.active) {
       feedbackKind.value = 'ok';
       feedbackMsg.value = isZh.value
-        ? `✨ 已恢复「${info?.label || '支持者'}」徽章！`
-        : `✨ Restored your "${info?.label || 'Supporter'}" badge!`;
+        ? '✨ 已恢复「支持者」徽章！'
+        : '✨ Restored your "Supporter" badge!';
     } else {
       feedbackKind.value = 'err';
       feedbackMsg.value = isZh.value
@@ -147,11 +146,10 @@ async function handleRestore() {
         class="support__badge-card"
         :class="{
           'support__badge-card--active': Boolean(activeBadge),
-          'support__badge-card--super': activeBadge?.isSuper,
         }"
       >
         <div class="support__badge-pill">
-          <span class="support__badge-icon">{{ activeBadge ? activeBadge.icon : '✨' }}</span>
+          <span class="support__badge-icon">✨</span>
           <span class="support__badge-label">
             {{
               activeBadge
@@ -166,14 +164,14 @@ async function handleRestore() {
           <template v-if="activeBadge">
             {{
               isZh
-                ? '你已点亮专属支持者徽章，徽章会展示在「关于」与「设置」界面。'
+                ? '你已点亮专属「支持者」徽章，徽章会展示在「关于」与「设置」界面。'
                 : 'Your Supporter badge is active and displayed in About and Settings.'
             }}
           </template>
           <template v-else>
             {{
               isZh
-                ? 'SoloMD 所有功能永久免费、无广告。选择任意一档支持，即可永久点亮专属「支持者徽章」。'
+                ? 'SoloMD 所有功能永久免费、无广告。选择任意一档支持，即可永久点亮专属「支持者」徽章。'
                 : 'All SoloMD features are free forever. Pick any tier below to permanently unlock your Supporter badge.'
             }}
           </template>
@@ -188,7 +186,6 @@ async function handleRestore() {
           type="button"
           class="support__tier"
           :class="{
-            'support__tier--feast': tier.tier === 'feast',
             'support__tier--owned': supporterRecord.purchasedIds.includes(tier.productId),
           }"
           :disabled="Boolean(busyProductId) || restoring"
@@ -199,7 +196,7 @@ async function handleRestore() {
             <div class="support__tier-top">
               <span class="support__tier-title">{{ displayTitle(tier) }}</span>
               <span class="support__tier-badge-tag">
-                ✨ {{ isZh ? tier.badgeZh : tier.badgeEn }}
+                ✨ {{ isZh ? '支持者徽章' : 'Supporter Badge' }}
               </span>
             </div>
             <div class="support__tier-desc">{{ displayDesc(tier) }}</div>

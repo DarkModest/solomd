@@ -14,9 +14,13 @@ export interface TipTierSpec {
   descEn: string;
   defaultPriceZh: string;
   defaultPriceEn: string;
-  badgeZh: string;
-  badgeEn: string;
 }
+
+export const SUPPORTER_BADGE = {
+  icon: '✨',
+  labelZh: '支持者',
+  labelEn: 'Supporter',
+} as const;
 
 export const TIP_TIERS: readonly TipTierSpec[] = [
   {
@@ -29,8 +33,6 @@ export const TIP_TIERS: readonly TipTierSpec[] = [
     descEn: 'Fuel a late-night coding session and unlock the Supporter badge.',
     defaultPriceZh: '¥8',
     defaultPriceEn: '$0.99',
-    badgeZh: '支持者',
-    badgeEn: 'Supporter',
   },
   {
     productId: 'app.solomd.tip.meal',
@@ -38,31 +40,26 @@ export const TIP_TIERS: readonly TipTierSpec[] = [
     icon: '🍜',
     titleZh: '请吃顿工作餐',
     titleEn: 'Buy a Lunch',
-    descZh: '支持 SoloMD 持续打磨五端体验，点亮「热心支持者」徽章。',
-    descEn: 'Support cross-platform polish and unlock the Kind Supporter badge.',
+    descZh: '支持 SoloMD 持续打磨五端体验，点亮「支持者」徽章。',
+    descEn: 'Support cross-platform polish and unlock the Supporter badge.',
     defaultPriceZh: '¥28',
     defaultPriceEn: '$2.99',
-    badgeZh: '热心支持者',
-    badgeEn: 'Kind Supporter',
   },
   {
     productId: 'app.solomd.tip.feast',
     tier: 'feast',
     icon: '🚀',
-    titleZh: '超级支持',
-    titleEn: 'Super Support',
-    descZh: '强力支持 SoloMD 保持免费开源与独立开发，点亮「超级支持者」金章。',
-    descEn: 'Champion free, open-source independent development and unlock the Super Supporter gold badge.',
+    titleZh: '强力支持',
+    titleEn: 'Generous Support',
+    descZh: '支持 SoloMD 保持免费开源与独立开发，点亮「支持者」徽章。',
+    descEn: 'Champion free, open-source independent development and unlock the Supporter badge.',
     defaultPriceZh: '¥68',
     defaultPriceEn: '$9.99',
-    badgeZh: '超级支持者',
-    badgeEn: 'Super Supporter',
   },
 ] as const;
 
 export interface SupporterRecord {
   active: boolean;
-  tier: SupporterTier | null;
   purchasedIds: string[];
   count: number;
   updatedAt: number;
@@ -89,12 +86,6 @@ interface BackendPurchaseResult {
 
 const STORAGE_KEY = 'solomd.supporter.v1';
 
-const TIER_RANK: Record<SupporterTier, number> = {
-  coffee: 1,
-  meal: 2,
-  feast: 3,
-};
-
 export function tierFromProductId(productId: string): SupporterTier | null {
   if (productId === 'app.solomd.tip.feast' || productId === 'feast') return 'feast';
   if (productId === 'app.solomd.tip.meal' || productId === 'meal') return 'meal';
@@ -102,28 +93,14 @@ export function tierFromProductId(productId: string): SupporterTier | null {
   return null;
 }
 
-export function highestSupporterTier(productIds: readonly string[]): SupporterTier | null {
-  let best: SupporterTier | null = null;
-  for (const id of productIds) {
-    const t = tierFromProductId(id);
-    if (!t) continue;
-    if (!best || TIER_RANK[t] > TIER_RANK[best]) {
-      best = t;
-    }
-  }
-  return best;
-}
-
-export function badgeInfoForTier(
-  tier: SupporterTier | null,
+export function badgeInfo(
+  active: boolean,
   isZh: boolean,
-): { icon: string; label: string; isSuper: boolean } | null {
-  if (!tier) return null;
-  const spec = TIP_TIERS.find((x) => x.tier === tier) ?? TIP_TIERS[0];
+): { icon: string; label: string } | null {
+  if (!active) return null;
   return {
-    icon: spec.icon,
-    label: isZh ? spec.badgeZh : spec.badgeEn,
-    isSuper: tier === 'feast',
+    icon: SUPPORTER_BADGE.icon,
+    label: isZh ? SUPPORTER_BADGE.labelZh : SUPPORTER_BADGE.labelEn,
   };
 }
 
@@ -137,14 +114,12 @@ export function mergeSupporterRecord(
     if (tierFromProductId(id)) set.add(id);
   }
   const purchasedIds = Array.from(set);
-  const highest = highestSupporterTier(purchasedIds) ?? current.tier;
-  const active = Boolean(highest) || current.active;
+  const active = purchasedIds.length > 0 || current.active;
   const count = incrementCount
     ? Math.max(1, current.count + 1)
     : Math.max(current.count, purchasedIds.length);
   return {
     active,
-    tier: highest,
     purchasedIds,
     count,
     updatedAt: Date.now(),
@@ -154,26 +129,24 @@ export function mergeSupporterRecord(
 function readStoredRecord(): SupporterRecord {
   try {
     if (typeof localStorage === 'undefined') {
-      return { active: false, tier: null, purchasedIds: [], count: 0, updatedAt: 0 };
+      return { active: false, purchasedIds: [], count: 0, updatedAt: 0 };
     }
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      return { active: false, tier: null, purchasedIds: [], count: 0, updatedAt: 0 };
+      return { active: false, purchasedIds: [], count: 0, updatedAt: 0 };
     }
     const parsed = JSON.parse(raw);
     const ids = Array.isArray(parsed?.purchasedIds)
       ? parsed.purchasedIds.filter((x: unknown): x is string => typeof x === 'string')
       : [];
-    const tier = highestSupporterTier(ids) ?? tierFromProductId(String(parsed?.tier || ''));
     return {
-      active: Boolean(parsed?.active || tier),
-      tier,
+      active: Boolean(parsed?.active || ids.length > 0),
       purchasedIds: ids,
       count: typeof parsed?.count === 'number' && parsed.count > 0 ? parsed.count : ids.length,
       updatedAt: typeof parsed?.updatedAt === 'number' ? parsed.updatedAt : 0,
     };
   } catch {
-    return { active: false, tier: null, purchasedIds: [], count: 0, updatedAt: 0 };
+    return { active: false, purchasedIds: [], count: 0, updatedAt: 0 };
   }
 }
 
@@ -192,7 +165,7 @@ export const storeProducts = ref<Record<string, IapProductInfo>>({});
 export const iapNativeSupported = ref<boolean>(IS_APP_STORE_BUILD);
 export const iapUseStoreFlow = ref<boolean>(IS_APP_STORE_BUILD);
 
-export const isSupporter = computed(() => supporterRecord.value.active && supporterRecord.value.tier !== null);
+export const isSupporter = computed(() => supporterRecord.value.active);
 
 let initDone = false;
 

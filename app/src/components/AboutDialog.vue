@@ -10,7 +10,7 @@ import { useI18n } from '../i18n';
 import {
   supporterRecord,
   iapUseStoreFlow,
-  badgeInfoForTier,
+  badgeInfo,
   initSupporterState,
 } from '../lib/supporter';
 
@@ -21,7 +21,7 @@ const { lang } = useI18n();
 const isZh = computed(() => String(lang.value || '').startsWith('zh'));
 
 const supportOpen = ref(false);
-const activeBadge = computed(() => badgeInfoForTier(supporterRecord.value.tier, isZh.value));
+const activeBadge = computed(() => badgeInfo(supporterRecord.value.active, isZh.value));
 
 const VERSION = ref('…');
 onMounted(async () => {
@@ -113,7 +113,6 @@ async function visit(url: string) {
           v-if="activeBadge"
           type="button"
           class="about__supporter-badge"
-          :class="{ 'about__supporter-badge--super': activeBadge.isSuper }"
           @click="supportOpen = true"
         >
           <span>{{ activeBadge.icon }}</span>
