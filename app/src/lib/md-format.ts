@@ -16,6 +16,7 @@ import { applyChanges, renumberChanges } from './list-renumber';
 export type FormatKind =
   | 'bold'
   | 'italic'
+  | 'underline'
   | 'strike'
   | 'code'
   | 'link'
@@ -27,7 +28,7 @@ export type FormatKind =
   | 'codeblock';
 
 export const FORMAT_KINDS: FormatKind[] = [
-  'bold', 'italic', 'strike', 'code', 'link',
+  'bold', 'italic', 'underline', 'strike', 'code', 'link',
   'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
   'quote', 'ul', 'ol', 'task', 'codeblock',
 ];
@@ -146,6 +147,82 @@ function toggleWrap(doc: string, from: number, to: number, marker: string): Form
     return { from: s - w, to: e + w, insert: inner, selFrom: s - w, selTo: e - w };
   }
   return { from: s, to: e, insert: marker + inner + marker, selFrom: s + w, selTo: e + w };
+}
+
+function toggleTagWrap(doc: string, from: number, to: number, openTag: string, closeTag: string): FormatEdit {
+  let [s, e] = targetRange(doc, from, to);
+  const ow = openTag.length;
+  const cw = closeTag.length;
+  if (
+    e - s >= ow + cw &&
+    doc.slice(s, s + ow).toLowerCase() === openTag &&
+    doc.slice(e - cw, e).toLowerCase() === closeTag
+  ) {
+    s += ow;
+    e -= cw;
+  }
+  const inner = doc.slice(s, e);
+  if (
+    s >= ow &&
+    doc.slice(s - ow, s).toLowerCase() === openTag &&
+    doc.slice(e, e + cw).toLowerCase() === closeTag
+  ) {
+    return { from: s - ow, to: e + cw, insert: inner, selFrom: s - ow, selTo: e - ow };
+  }
+  if (from === to) {
+    const ls = from > 0 ? doc.lastIndexOf('\n', from - 1) + 1 : 0;
+    let le = doc.indexOf('\n', from);
+    if (le < 0) le = doc.length;
+    const lineLower = doc.slice(ls, le).toLowerCase();
+    let idx = 0;
+    while (idx < lineLower.length) {
+      const o = lineLower.indexOf(openTag, idx);
+      if (o < 0) break;
+      const c = lineLower.indexOf(closeTag, o + ow);
+      if (c < 0) break;
+      const openEnd = ls + o + ow;
+      const closeStart = ls + c;
+      if (from >= openEnd && from <= closeStart) {
+        return {
+          from: ls + o,
+          to: closeStart + cw,
+          insert: doc.slice(openEnd, closeStart),
+          selFrom: from - ow,
+          selTo: from - ow,
+        };
+      }
+      idx = c + cw;
+    }
+  }
+  return { from: s, to: e, insert: openTag + inner + closeTag, selFrom: s + ow, selTo: e + ow };
+}
+
+function toggleTagLines(doc: string, from: number, to: number, openTag: string, closeTag: string): FormatEdit {
+  const ow = openTag.length;
+  const cw = closeTag.length;
+  const segs = doc.slice(from, to).split('\n');
+  const atLineStart = from === 0 || doc[from - 1] === '\n';
+  const parts = segs.map((seg, i) => {
+    const lineStart = i > 0 || atLineStart;
+    const pre = lineStart ? seg.match(LINE_PREFIX)?.[0] ?? '' : '';
+    const rest = seg.slice(pre.length);
+    const core = rest.replace(/\s+$/, '');
+    return { pre, core, post: rest.slice(core.length) };
+  });
+  const has = (c: string) =>
+    c.length >= ow + cw &&
+    c.slice(0, ow).toLowerCase() === openTag &&
+    c.slice(c.length - cw).toLowerCase() === closeTag;
+  const filled = parts.filter((p) => p.core);
+  const remove = filled.length > 0 && filled.every((p) => has(p.core));
+  const insert = parts
+    .map(({ pre, core, post }) => {
+      if (!core) return pre + post;
+      if (remove) return pre + core.slice(ow, core.length - cw) + post;
+      return pre + (has(core) ? core : openTag + core + closeTag) + post;
+    })
+    .join('\n');
+  return { from, to, insert, selFrom: from, selTo: from + insert.length };
 }
 
 function makeLink(doc: string, from: number, to: number): FormatEdit {
@@ -335,9 +412,11 @@ export function applyFormat(doc: string, from: number, to: number, kind: FormatK
   const b = Math.max(0, Math.min(Math.max(from, to), doc.length));
   const inline = INLINE_MARKERS[kind];
   if (inline && doc.slice(a, b).includes('\n')) return toggleInlineLines(doc, a, b, inline);
+  if (kind === 'underline' && doc.slice(a, b).includes('\n')) return toggleTagLines(doc, a, b, '<u>', '</u>');
   switch (kind) {
     case 'bold': return toggleStars(doc, a, b, 2);
     case 'italic': return toggleStars(doc, a, b, 1);
+    case 'underline': return toggleTagWrap(doc, a, b, '<u>', '</u>');
     case 'strike': return toggleWrap(doc, a, b, '~~');
     case 'code': return toggleWrap(doc, a, b, '`');
     case 'link': return makeLink(doc, a, b);

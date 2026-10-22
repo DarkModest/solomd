@@ -789,8 +789,9 @@ const inCustomMode = ref(!fontFamilyPresetValues.value.has(settings.fontFamily))
 const customFontFamily = ref(
   inCustomMode.value ? settings.fontFamily : ''
 );
-void import('../lib/custom-font').then(async ({ discoverLocalFontFiles }) => {
-  const files = await discoverLocalFontFiles();
+async function refreshLocalFonts(force = false) {
+  const { discoverLocalFontFiles } = await import('../lib/custom-font');
+  const files = await discoverLocalFontFiles(undefined, force);
   const seen = new Set<string>();
   const list: Array<{ label: string; value: string }> = [];
   for (const f of files) {
@@ -803,7 +804,14 @@ void import('../lib/custom-font').then(async ({ discoverLocalFontFiles }) => {
   if (fontFamilyPresetValues.value.has(settings.fontFamily)) {
     inCustomMode.value = false;
   }
-});
+}
+void refreshLocalFonts(false);
+watch(
+  () => props.open,
+  (open) => {
+    if (open) void refreshLocalFonts(true);
+  },
+);
 function onSelectFontFamily(v: string) {
   if (v === '__custom__') {
     inCustomMode.value = true;
@@ -2564,7 +2572,7 @@ function onSelectPdfFont(v: string) {
   min-height: 30px;
   padding: 0 10px;
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--ui-font-size, 13px);
   font-weight: 450;
   color: var(--text);
   background: transparent;
@@ -2833,7 +2841,7 @@ function onSelectPdfFont(v: string) {
   min-width: 0;
 }
 .settings__body > section > label {
-  font-size: 13px;
+  font-size: var(--ui-font-size, 13px);
   line-height: 1.4;
   color: var(--text);
   display: flex;
@@ -2970,7 +2978,7 @@ select {
   height: 28px;
   padding: 0 8px;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--ui-font-size, 13px);
   color: var(--text);
   background: var(--fill-1);
   border: 0;
